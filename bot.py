@@ -37,11 +37,11 @@ UPDATE_URL = os.getenv(
 
 OWNER_URL = os.getenv(
     "OWNER_URL",
-    "https://t.me/your_username"
+    "https://t.me/Only_badnam"
 )
 
 # Direct image URL for /start
-START_IMAGE = os.getenv("START_IMAGE", "")
+START_IMAGE = os.getenv("START_IMAGE", "https://n.uguu.se/UZTaivEa.jpg")
 
 DEFAULT_TAG_DELAY = 2
 
