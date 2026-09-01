@@ -609,7 +609,7 @@ async def remember(update, context):
     user = update.effective_user
     chat = update.effective_chat
 
-    if not user or not chat:
+    if not user or not chat or user.is_bot:
         return
 
     db(
@@ -817,71 +817,86 @@ async def tagall(update, context):
             parse_mode=ParseMode.HTML,
         )
 
-    chat_id = update.effective_chat.id
-
-    # Use the command text, or the text/caption of a replied-to message.
-    text = " ".join(context.args).strip()
-    replied = update.message.reply_to_message
-    if replied:
-        replied_text = replied.text or replied.caption or ""
-        if replied_text:
-            text = replied_text
-
     rows = db(
         """
         SELECT user_id,name
         FROM users
         WHERE chat_id=?
-        ORDER BY last_seen ASC
+        ORDER BY last_seen DESC
+        LIMIT 80
         """,
-        (chat_id,),
+        (update.effective_chat.id,),
         True,
     )
 
+    rows = [
+        row for row in rows
+        if row[0] != update.effective_user.id
+    ]
+
     if not rows:
         return await update.message.reply_text(
-            "⚠️ No tracked member IDs are available yet. Telegram Bot API does not provide a method to download the complete historical member list.",
+            "🌈 <b>I haven't seen enough members yet.</b>",
             parse_mode=ParseMode.HTML,
         )
 
     setting = db(
-        "SELECT tag_delay FROM settings WHERE chat_id=?",
-        (chat_id,),
+        """
+        SELECT tag_delay
+        FROM settings
+        WHERE chat_id=?
+        """,
+        (update.effective_chat.id,),
         True,
     )
-    delay = float(setting[0][0]) if setting and setting[0][0] is not None else DEFAULT_TAG_DELAY
-    delay = max(0.5, min(delay, 30.0))
 
-    db(
-        "INSERT INTO tags(chat_id,active) VALUES(?,1) ON CONFLICT(chat_id) DO UPDATE SET active=1",
-        (chat_id,),
+    delay = (
+        float(setting[0][0])
+        if setting
+        and setting[0][0] is not None
+        else DEFAULT_TAG_DELAY
     )
 
-    # 5 mentions per message keeps requests small and avoids the old 80-user cutoff.
-    batch_size = 5
-    try:
-        for start_index in range(0, len(rows), batch_size):
-            state = db("SELECT active FROM tags WHERE chat_id=?", (chat_id,), True)
-            if not state or not state[0][0]:
-                break
+    db(
+        """
+        INSERT INTO tags(chat_id,active)
+        VALUES(?,1)
 
-            chunk = rows[start_index:start_index + batch_size]
-            mentions = " ".join(mention(uid, name) for uid, name in chunk)
-            body = f"{escape(text)}\n\n{mentions}" if text else mentions
+        ON CONFLICT(chat_id)
+        DO UPDATE SET active=1
+        """,
+        (update.effective_chat.id,),
+    )
 
-            try:
-                await update.message.reply_text(
-                    body,
-                    parse_mode=ParseMode.HTML,
-                    disable_web_page_preview=True,
-                )
-            except Exception as exc:
-                log.warning("Tag batch failed: %s", exc)
+    for start_index in range(0, len(rows), 8):
 
-            if start_index + batch_size < len(rows):
-                await asyncio.sleep(delay)
-    finally:
-        db("UPDATE tags SET active=0 WHERE chat_id=?", (chat_id,))
+        state = db(
+            "SELECT active FROM tags WHERE chat_id=?",
+            (update.effective_chat.id,),
+            True,
+        )
+
+        if not state or not state[0][0]:
+            break
+
+        chunk = rows[
+            start_index:start_index + 8
+        ]
+
+        await update.message.reply_text(
+            "✈️ " + " ".join(
+                mention(uid, name)
+                for uid, name in chunk
+            ),
+            parse_mode=ParseMode.HTML,
+        )
+
+        await asyncio.sleep(delay)
+
+    db(
+        "UPDATE tags SET active=0 WHERE chat_id=?",
+        (update.effective_chat.id,),
+    )
 
 
 # =========================================================
@@ -1274,6 +1289,27 @@ async def new_member(update, context):
     user = cm.new_chat_member.user
     chat = cm.chat
 
+    # Persist newly joined members immediately.
+    if user and not user.is_bot:
+        db(
+            """
+            INSERT INTO users(chat_id,user_id,name,username,last_seen)
+            VALUES(?,?,?,?,?)
+            ON CONFLICT(chat_id,user_id)
+            DO UPDATE SET
+              name=excluded.name,
+              username=excluded.username,
+              last_seen=excluded.last_seen
+            """,
+            (
+                chat.id,
+                user.id,
+                user.full_name,
+                user.username,
+                int(time.time()),
+            ),
+        )
+
     r = db(
         """
         SELECT welcome,welcome_enabled
@@ -1511,6 +1547,14 @@ async def post_init(application):
 
 def main():
     app = Application.builder().token(TOKEN).post_init(post_init).build()
+
+    # Track every update that contains a user before command handlers run.
+    # This fixes the "No tracked member IDs" problem when /tagall is the first
+    # command a user sends.
+    app.add_handler(
+        MessageHandler(filters.ALL, track_message),
+        group=-1,
+    )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(buttons))
