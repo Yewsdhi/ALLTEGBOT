@@ -374,12 +374,12 @@ PAGES = {
 
 <b>𝙂𝙍𝙊𝙐𝙋 𝘾𝙊𝙈𝙈𝘼𝙉𝘿𝙎</b>
 
-• <code>/tagall [message]</code> — 𝙩𝙖𝙜 𝙖𝙡𝙡 𝙨𝙚𝙚𝙣 𝙢𝙚𝙢𝙗𝙚𝙧𝙨 𝙬𝙞𝙩𝙝 𝙮𝙤𝙪𝙧 𝙢𝙚𝙨𝙨𝙖𝙜𝙚
+• <code>/tagall</code> — 𝙩𝙖𝙜 𝙖𝙘𝙩𝙞𝙫𝙚 𝙢𝙚𝙢𝙗𝙚𝙧𝙨
 • <code>/tagadmins</code> — 𝙩𝙖𝙜 𝙜𝙧𝙤𝙪𝙥 𝙖𝙙𝙢𝙞𝙣𝙨
 • <code>/cancel</code> — 𝙨𝙩𝙤𝙥 𝙩𝙖𝙜𝙜𝙞𝙣𝙜
 • <code>/tagdelay 2</code> — 𝙨𝙚𝙩 𝙙𝙚𝙡𝙖𝙮
 
-<i>Telegram Bot API does not provide a full member-list endpoint, so the bot can tag every member it has seen/stored.</i>""",
+<i>Only users seen by the bot can be tagged.</i>""",
 
     "couples": """<b>🥳 𝘾𝙊𝙐𝙋𝙇𝙀𝙎 𝙎𝙔𝙎𝙏𝙀𝙈</b>
 
@@ -817,23 +817,22 @@ async def tagall(update, context):
             parse_mode=ParseMode.HTML,
         )
 
-    # Telegram Bot API does not expose a "list every member" endpoint.
-    # We therefore tag every member the bot has legitimately seen/stored.
-    # Do not cap this at 80: large groups are handled in multiple messages.
     rows = db(
         """
         SELECT user_id,name
         FROM users
         WHERE chat_id=?
         ORDER BY last_seen DESC
+        LIMIT 80
         """,
         (update.effective_chat.id,),
         True,
     )
 
-    # Also include the current command sender only when they are already
-    # represented by Telegram as a normal user; avoid tagging the invoker.
-    rows = [row for row in rows if row[0] != update.effective_user.id]
+    rows = [
+        row for row in rows
+        if row[0] != update.effective_user.id
+    ]
 
     if not rows:
         return await update.message.reply_text(
@@ -869,18 +868,7 @@ async def tagall(update, context):
         (update.effective_chat.id,),
     )
 
-    # Optional message: /tagall Good morning everyone ❤️
-    # If the command is a reply, use the replied text as the message.
-    tag_text = " ".join(context.args).strip()
-    if not tag_text and update.message.reply_to_message and update.message.reply_to_message.text:
-        tag_text = update.message.reply_to_message.text.strip()
-
-    header = f"📢 <b>{escape(tag_text)}</b>\n\n" if tag_text else "📢 <b>Everyone!</b>\n\n"
-
-    # Keep each Telegram message comfortably below the 4096-character limit.
-    # A smaller chunk also makes mentions reliable on large groups.
-    chunk_size = 8
-    for start_index in range(0, len(rows), chunk_size):
+    for start_index in range(0, len(rows), 8):
 
         state = db(
             "SELECT active FROM tags WHERE chat_id=?",
@@ -891,18 +879,19 @@ async def tagall(update, context):
         if not state or not state[0][0]:
             break
 
-        chunk = rows[start_index:start_index + chunk_size]
-        mentions = " ".join(mention(uid, name) for uid, name in chunk)
+        chunk = rows[
+            start_index:start_index + 8
+        ]
 
         await update.message.reply_text(
-            header + "✈️ " + mentions,
+            "✈️ " + " ".join(
+                mention(uid, name)
+                for uid, name in chunk
+            ),
             parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
         )
 
-        # Telegram flood limits make a short delay necessary for large tags.
-        if start_index + chunk_size < len(rows):
-            await asyncio.sleep(delay)
+        await asyncio.sleep(delay)
 
     db(
         "UPDATE tags SET active=0 WHERE chat_id=?",
