@@ -37,11 +37,12 @@ UPDATE_URL = os.getenv(
 
 OWNER_URL = os.getenv(
     "OWNER_URL",
-    "https://t.me/Only_badnam"
+    "https://t.me/your_username"
 )
 
 # Direct image URL for /start
-START_IMAGE = os.getenv("START_IMAGE", "https://n.uguu.se/UZTaivEa.jpg")
+START_IMAGE = os.getenv("START_IMAGE", "")
+OWNER_CHAT_ID = os.getenv("OWNER_CHAT_ID")
 
 DEFAULT_TAG_DELAY = 2
 
@@ -429,6 +430,48 @@ PAGES = {
 
 
 # =========================================================
+# OWNER START NOTIFICATION
+# =========================================================
+
+async def notify_owner_new_start(update, context):
+    if not OWNER_CHAT_ID or not update.effective_user:
+        return
+
+    user = update.effective_user
+    chat = update.effective_chat
+
+    # Don't send a notification to the owner for the owner's own /start.
+    try:
+        if int(OWNER_CHAT_ID) == user.id:
+            return
+    except (TypeError, ValueError):
+        pass
+
+    username = f"@{escape(user.username)}" if user.username else "No username"
+    chat_text = (
+        f"\n<b>💬 Chat:</b> {escape(chat.title)}"
+        if chat and chat.title else ""
+    )
+
+    message = (
+        "<b>🔔 NEW BOT START</b>\n\n"
+        f"<b>👤 User:</b> {mention(user.id, user.full_name)}\n"
+        f"<b>🆔 ID:</b> <code>{user.id}</code>\n"
+        f"<b>🔗 Username:</b> {username}"
+        f"{chat_text}"
+    )
+
+    try:
+        await context.bot.send_message(
+            chat_id=int(OWNER_CHAT_ID),
+            text=message,
+            parse_mode=ParseMode.HTML,
+        )
+    except Exception:
+        log.exception("Failed to notify owner about new /start")
+
+
+# =========================================================
 # START COMMAND
 # =========================================================
 
@@ -436,6 +479,8 @@ async def start(update, context):
 
     if not update.message:
         return
+
+    await notify_owner_new_start(update, context)
 
     if START_IMAGE:
 
@@ -1331,7 +1376,6 @@ async def antispam(update, context):
 
 
 async def lock(update, context):
-
     if not await is_admin(update):
         return await update.message.reply_text(
             "⚠️ <b>Admins only.</b>",
@@ -1364,7 +1408,6 @@ async def lock(update, context):
 
 
 async def unlock(update, context):
-
     if not await is_admin(update):
         return await update.message.reply_text(
             "⚠️ <b>Admins only.</b>",
@@ -1399,21 +1442,19 @@ async def unlock(update, context):
 async def link_guard(update, context):
     if not update.message or not update.message.text:
         return
-
     if not is_group(update):
         return
 
-    r = db(
+    locked = db(
         "SELECT 1 FROM locks WHERE chat_id=? AND feature='links'",
         (update.effective_chat.id,),
         True,
     )
-
-    if not r:
+    if not locked:
         return
 
     text = update.message.text.lower()
-    if "http://" not in text and "https://" not in text and "t.me/" not in text:
+    if not any(x in text for x in ("http://", "https://", "t.me/")):
         return
 
     if await is_admin(update):
@@ -1425,14 +1466,69 @@ async def link_guard(update, context):
         pass
 
 
+
+# =========================================================
+# GLOBAL ERROR HANDLER
+# =========================================================
+
+async def error_handler(update, context):
+    log.exception("Unhandled exception while processing update", exc_info=context.error)
+
+    try:
+        if update and update.effective_message:
+            await update.effective_message.reply_text(
+                "⚠️ <b>Command process karte waqt error aa gaya.</b>\n"
+                "Heroku logs check karo.",
+                parse_mode=ParseMode.HTML,
+            )
+    except Exception:
+        pass
+
+
+async def post_init(application):
+    # Show the bot commands in Telegram's command menu.
+    from telegram import BotCommand
+
+    await application.bot.set_my_commands([
+        BotCommand("start", "Main menu"),
+        BotCommand("help", "Help & commands"),
+        BotCommand("id", "User/chat ID"),
+        BotCommand("info", "User information"),
+        BotCommand("ping", "Bot status"),
+        BotCommand("admins", "Group admins"),
+        BotCommand("tagall", "Tag active members"),
+        BotCommand("tagadmins", "Tag group admins"),
+        BotCommand("cancel", "Stop tagging"),
+        BotCommand("tagdelay", "Set tag delay"),
+        BotCommand("couple", "Random couple"),
+        BotCommand("setcouple", "Set couple by reply"),
+        BotCommand("mycouple", "Show your couple"),
+        BotCommand("delcouple", "Remove couple"),
+        BotCommand("ship", "Compatibility"),
+        BotCommand("dice", "Roll dice"),
+        BotCommand("coin", "Heads or tails"),
+        BotCommand("truth", "Truth"),
+        BotCommand("dare", "Dare"),
+        BotCommand("8ball", "Magic 8-ball"),
+        BotCommand("welcome", "Show welcome"),
+        BotCommand("setwelcome", "Set welcome"),
+        BotCommand("delwelcome", "Delete welcome"),
+        BotCommand("antispam", "Anti-spam on/off"),
+        BotCommand("lock", "Lock links"),
+        BotCommand("unlock", "Unlock links"),
+    ])
+
+
+
 # =========================================================
 # MAIN
 # =========================================================
 
 def main():
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(post_init).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(buttons))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("id", id_cmd))
     app.add_handler(CommandHandler("info", info_cmd))
@@ -1466,7 +1562,7 @@ def main():
         )
     )
 
-    # Track users and guard links in normal text messages.
+    # Track ordinary messages.
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -1474,6 +1570,8 @@ def main():
         ),
         group=0,
     )
+
+    # Link protection runs after user tracking.
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -1481,6 +1579,8 @@ def main():
         ),
         group=1,
     )
+
+    app.add_error_handler(error_handler)
 
     log.info("Bot starting...")
     app.run_polling(
