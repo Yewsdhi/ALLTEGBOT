@@ -1332,4 +1332,162 @@ async def antispam(update, context):
 
 async def lock(update, context):
 
-    if not await is_admin
+    if not await is_admin(update):
+        return await update.message.reply_text(
+            "⚠️ <b>Admins only.</b>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    if not context.args:
+        return await update.message.reply_text(
+            "Use <code>/lock links</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    feature = context.args[0].lower()
+
+    if feature != "links":
+        return await update.message.reply_text(
+            "⚠️ <b>Only links lock is supported.</b>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    db(
+        "INSERT OR IGNORE INTO locks(chat_id,feature) VALUES(?,?)",
+        (update.effective_chat.id, feature),
+    )
+
+    await update.message.reply_text(
+        "🔒 <b>Links locked.</b>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def unlock(update, context):
+
+    if not await is_admin(update):
+        return await update.message.reply_text(
+            "⚠️ <b>Admins only.</b>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    if not context.args:
+        return await update.message.reply_text(
+            "Use <code>/unlock links</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    feature = context.args[0].lower()
+
+    if feature != "links":
+        return await update.message.reply_text(
+            "⚠️ <b>Only links unlock is supported.</b>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    db(
+        "DELETE FROM locks WHERE chat_id=? AND feature=?",
+        (update.effective_chat.id, feature),
+    )
+
+    await update.message.reply_text(
+        "🔓 <b>Links unlocked.</b>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+async def link_guard(update, context):
+    if not update.message or not update.message.text:
+        return
+
+    if not is_group(update):
+        return
+
+    r = db(
+        "SELECT 1 FROM locks WHERE chat_id=? AND feature='links'",
+        (update.effective_chat.id,),
+        True,
+    )
+
+    if not r:
+        return
+
+    text = update.message.text.lower()
+    if "http://" not in text and "https://" not in text and "t.me/" not in text:
+        return
+
+    if await is_admin(update):
+        return
+
+    try:
+        await update.message.delete()
+    except Exception:
+        pass
+
+
+# =========================================================
+# MAIN
+# =========================================================
+
+def main():
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("id", id_cmd))
+    app.add_handler(CommandHandler("info", info_cmd))
+    app.add_handler(CommandHandler("ping", ping))
+    app.add_handler(CommandHandler("admins", admins))
+    app.add_handler(CommandHandler("tagdelay", tagdelay))
+    app.add_handler(CommandHandler("tagall", tagall))
+    app.add_handler(CommandHandler("tagadmins", admins))
+    app.add_handler(CommandHandler("cancel", cancel))
+    app.add_handler(CommandHandler("couple", couple))
+    app.add_handler(CommandHandler("setcouple", setcouple))
+    app.add_handler(CommandHandler("mycouple", mycouple))
+    app.add_handler(CommandHandler("delcouple", delcouple))
+    app.add_handler(CommandHandler("ship", ship))
+    app.add_handler(CommandHandler("dice", dice))
+    app.add_handler(CommandHandler("coin", coin))
+    app.add_handler(CommandHandler("truth", truth))
+    app.add_handler(CommandHandler("dare", dare))
+    app.add_handler(CommandHandler("8ball", ball))
+    app.add_handler(CommandHandler("welcome", welcome_cmd))
+    app.add_handler(CommandHandler("setwelcome", setwelcome))
+    app.add_handler(CommandHandler("delwelcome", delwelcome))
+    app.add_handler(CommandHandler("antispam", antispam))
+    app.add_handler(CommandHandler("lock", lock))
+    app.add_handler(CommandHandler("unlock", unlock))
+
+    app.add_handler(
+        ChatMemberHandler(
+            new_member,
+            ChatMemberHandler.CHAT_MEMBER,
+        )
+    )
+
+    # Track users and guard links in normal text messages.
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            track_message,
+        ),
+        group=0,
+    )
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND,
+            link_guard,
+        ),
+        group=1,
+    )
+
+    log.info("Bot starting...")
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+    )
+
+
+if __name__ == "__main__":
+    main()
