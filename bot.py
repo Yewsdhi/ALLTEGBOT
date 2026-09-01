@@ -15,8 +15,8 @@ from telegram.ext import (
 
 TOKEN = os.getenv("BOT_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "mentionmayabot")
-SUPPORT_URL = os.getenv("SUPPORT_URL", "https://t.me/mentionmayabot")
-UPDATE_URL = os.getenv("UPDATE_URL", "https://t.me/mentionmayabot")
+SUPPORT_URL = os.getenv("SUPPORT_URL", "https://t.me/annu_support")
+UPDATE_URL = os.getenv("UPDATE_URL", "https://t.me/annu_support")
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is missing")
