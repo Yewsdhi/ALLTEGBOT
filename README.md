@@ -1,33 +1,63 @@
-# 🌈 Maya Mention — Full Bot
+<p align="center">
+<b>𝗗𝗘𝗣𝗟𝗢𝗬𝗠𝗘𝗡𝗧 𝗠𝗘𝗧𝗛𝗢𝗗𝗦</b>
+</p>
 
-## Features
-- Stylish start/help menu like the reference screenshots
-- Add-to-group button
-- Tag system: `/tagall`, `/tagadmins`, `/cancel`
-- Couples: `/couple`, `/setcouple`, `/mycouple`, `/delcouple`
-- Games: `/dice`, `/coin`, `/truth`, `/dare`, `/ship`, `/8ball`
-- User tools: `/id`, `/info`, `/ping`
-- Welcome system with `{name}`, `{mention}`, `{title}`
-- Security guard: `/antispam`, `/lock links`, `/unlock links`
-- SQLite database; no external database required
-- Heroku worker configuration
+<h3 align="center">
+    ─「 ᴅᴇᴩʟᴏʏ ᴏɴ ʜᴇʀᴏᴋᴜ 」─
+</h3>
 
-## Heroku
-1. Create a Heroku app.
-2. Deploy this project.
-3. Config Vars:
-   - `BOT_TOKEN` = BotFather token
-   - `BOT_USERNAME` = your bot username without @
-   - `SUPPORT_URL` = your support group/channel URL
-   - `UPDATE_URL` = your updates channel URL
-4. Scale worker to 1:
-```bash
-heroku ps:scale worker=1 -a YOUR_APP_NAME
-```
+<p align="center"><a href="https://dashboard.heroku.com/new?template=https://github.com/opk00637-glitch/Kriti-"> <img src="https://www.herokucdn.com/deploy/button.svg"></a></p>
 
-## Telegram permissions
-For group features, add the bot to your group and make it admin.
-For `/tagall`, the bot tags users it has observed in messages. Telegram's Bot API does not provide a general "list every member" endpoint, so a bot cannot magically fetch every group member.
+<br />
 
-## Important
-This is an original implementation inspired by the visible menu/features. It does not copy private/proprietary source code from another bot.
+---
+
+### 🔧 Quick Setup
+
+1. **Upgrade & Update:**
+   ```bash
+   sudo apt-get update && sudo apt-get upgrade -y
+   ```
+
+2. **Install Required Packages:**
+   ```bash
+   sudo apt-get install python3-pip ffmpeg -y
+   ```
+3. **Setting up PIP**
+   ```bash
+   sudo pip3 install -U pip
+   ```
+4. **Installing Node**
+   ```bash
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash && source ~/.bashrc && nvm install v18
+   ```
+5. **Clone the Repository**
+   ```bash
+   git clone https://github.com/Badnam019/KRITIMUSIC && cd KRITIMUSIC
+   ```
+6. **Install Requirements**
+   ```bash
+   pip3 install -U -r requirements.txt
+   ```
+7. **Create .env  with sample.env**
+   ```bash
+   cp sample.env .env
+   ```
+   - Edit .env with your vars
+8. **Editing Vars:**
+   ```bash
+   vi .env
+   ```
+   - Edit .env with your values.
+   - Press `I` button on keyboard to start editing.
+   - Press `Ctrl + C`  once you are done with editing vars and type `:wq` to save .env or `:qa` to exit editing.
+9. **Installing tmux**
+    ```bash
+    sudo apt install tmux -y && tmux
+    ```
+10. **Run the Bot**
+    ```bash
+    bash start
+    ```
+
+---
