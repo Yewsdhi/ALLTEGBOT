@@ -35,9 +35,9 @@ UPDATE_URL = os.getenv(
     "https://t.me/annu_support"
 )
 
-# Put your direct image URL in Heroku Config Vars:
-# START_IMAGE=https://your-domain.com/start.jpg
 START_IMAGE = os.getenv("START_IMAGE", "https://n.uguu.se/UZTaivEa.jpg")
+
+DEFAULT_TAG_DELAY = 2
 
 if not TOKEN:
     raise RuntimeError("BOT_TOKEN is missing")
@@ -68,9 +68,7 @@ conn = sqlite3.connect(
 
 conn.execute("PRAGMA journal_mode=WAL")
 
-cur = conn.cursor()
-
-cur.executescript("""
+conn.executescript("""
 CREATE TABLE IF NOT EXISTS users(
     chat_id INTEGER,
     user_id INTEGER,
@@ -91,7 +89,8 @@ CREATE TABLE IF NOT EXISTS settings(
     chat_id INTEGER PRIMARY KEY,
     welcome TEXT,
     welcome_enabled INTEGER DEFAULT 1,
-    antispam INTEGER DEFAULT 0
+    antispam INTEGER DEFAULT 0,
+    tag_delay REAL DEFAULT 2
 );
 
 CREATE TABLE IF NOT EXISTS tags(
@@ -106,7 +105,14 @@ CREATE TABLE IF NOT EXISTS locks(
 );
 """)
 
-conn.commit()
+# Add tag_delay to old databases if it doesn't exist
+try:
+    conn.execute(
+        "ALTER TABLE settings ADD COLUMN tag_delay REAL DEFAULT 2"
+    )
+    conn.commit()
+except sqlite3.OperationalError:
+    pass
 
 
 # =========================================================
@@ -115,12 +121,11 @@ conn.commit()
 
 def db(sql, args=(), fetch=False):
 
-    c = conn.cursor()
-
-    c.execute(sql, args)
+    cursor = conn.cursor()
+    cursor.execute(sql, args)
 
     if fetch:
-        return c.fetchall()
+        return cursor.fetchall()
 
     conn.commit()
 
@@ -148,6 +153,9 @@ def is_group(update):
 
 
 async def is_admin(update, user_id=None):
+
+    if not update.effective_chat:
+        return False
 
     uid = user_id or update.effective_user.id
 
@@ -185,7 +193,6 @@ def main_kb():
                 "♡ 𝘾𝙊𝙐𝙋𝙇𝙀𝙎",
                 callback_data="couples"
             ),
-
             InlineKeyboardButton(
                 "♧ 𝙂𝘼𝙈𝙀",
                 callback_data="games"
@@ -204,7 +211,6 @@ def main_kb():
                 "⌁ 𝙎𝙐𝙋𝙋𝙊𝙍𝙏 ↗",
                 url=SUPPORT_URL
             ),
-
             InlineKeyboardButton(
                 "☁ 𝙐𝙋𝘿𝘼𝙏𝙀𝙎 ↗",
                 url=UPDATE_URL
@@ -227,7 +233,6 @@ def help_kb():
                 "✈ 𝙏𝘼𝙂 𝙎𝙔𝙎𝙏𝙀𝙈",
                 callback_data="tag"
             ),
-
             InlineKeyboardButton(
                 "♡ 𝘾𝙊𝙐𝙋𝙇𝙀𝙎",
                 callback_data="couples"
@@ -239,7 +244,6 @@ def help_kb():
                 "♧ 𝙂𝘼𝙈𝙀𝙎",
                 callback_data="games"
             ),
-
             InlineKeyboardButton(
                 "◈ 𝙐𝙎𝙀𝙍 𝙏𝙊𝙊𝙇𝙎",
                 callback_data="tools"
@@ -271,7 +275,7 @@ def help_kb():
 
 
 # =========================================================
-# START TEXT
+# START
 # =========================================================
 
 START = """<b>╭━━━━━━━━━━━━━━━━━━╮</b>
@@ -318,44 +322,44 @@ PAGES = {
 <b>╭─ 𝙂𝙍𝙊𝙐𝙋 𝘾𝙊𝙈𝙈𝘼𝙉𝘿𝙎</b>
 
 │ • <code>/tagall</code>
-│   └─ 𝙏𝙖𝙜 𝙧𝙚𝙘𝙚𝙣𝙩𝙡𝙮 𝙖𝙘𝙩𝙞𝙫𝙚 𝙢𝙚𝙢𝙗𝙚𝙧𝙨
+│   └─ 𝙏𝙖𝙜 𝙖𝙘𝙩𝙞𝙫𝙚 𝙢𝙚𝙢𝙗𝙚𝙧𝙨
 │
 │ • <code>/tagadmins</code>
 │   └─ 𝙏𝙖𝙜 𝙜𝙧𝙤𝙪𝙥 𝙖𝙙𝙢𝙞𝙣𝙨
 │
 │ • <code>/cancel</code>
 │   └─ 𝙎𝙩𝙤𝙥 𝙩𝙖𝙜𝙜𝙞𝙣𝙜
-
+│
 <b>╰─ 𝘼𝘿𝙈𝙄𝙉</b>
 
 • <code>/tagdelay 2</code>
-  └─ 𝙎𝙚𝙩 𝙙𝙚𝙡𝙖𝙮 𝙗𝙚𝙩𝙬𝙚𝙚𝙣 𝙗𝙖𝙩𝙘𝙝𝙚𝙨
+  └─ 𝙎𝙚𝙩 𝙩𝙖𝙜 𝙙𝙚𝙡𝙖𝙮
 
 <i>Only users seen by the bot can be tagged.</i>""",
 
     "couples": """<b>♡ 𝘾𝙊𝙐𝙋𝙇𝙀𝙎 𝙎𝙔𝙎𝙏𝙀𝙈</b>
 
-<b>💗 𝘼𝙑𝘼𝙄𝙇𝘼𝘽𝙇𝙀 𝘾𝙊𝙈𝙈𝘼𝙉𝘿𝙎</b>
+<b>💗 𝘾𝙊𝙈𝙈𝘼𝙉𝘿𝙎</b>
 
 • <code>/couple</code> — 𝙍𝙖𝙣𝙙𝙤𝙢 𝙘𝙤𝙪𝙥𝙡𝙚
-• <code>/setcouple</code> — 𝙋𝙖𝙞𝙧 𝙬𝙞𝙩𝙝 𝙧𝙚𝙥𝙡𝙞𝙚𝙙 𝙪𝙨𝙚𝙧
-• <code>/mycouple</code> — 𝙎𝙝𝙤𝙬 𝙮𝙤𝙪𝙧 𝙘𝙤𝙪𝙥𝙡𝙚
+• <code>/setcouple</code> — 𝙎𝙚𝙩 𝙘𝙤𝙪𝙥𝙡𝙚
+• <code>/mycouple</code> — 𝙎𝙝𝙤𝙬 𝙘𝙤𝙪𝙥𝙡𝙚
 • <code>/delcouple</code> — 𝙍𝙚𝙢𝙤𝙫𝙚 𝙘𝙤𝙪𝙥𝙡𝙚
-• <code>/ship</code> — 𝘾𝙤𝙢𝙥𝙖𝙩𝙞𝙗𝙞𝙡𝙞𝙩𝙮 𝙜𝙖𝙢𝙚""",
+• <code>/ship</code> — 𝘾𝙤𝙢𝙥𝙖𝙩𝙞𝙗𝙞𝙡𝙞𝙩𝙮""",
 
     "games": """<b>♧ 𝙂𝘼𝙈𝙀𝙎 & 𝘼𝘾𝙏𝙄𝙑𝙄𝙏𝙄𝙀𝙎</b>
 
 🎲 <code>/dice</code> — 𝙍𝙤𝙡𝙡 𝙙𝙞𝙘𝙚
-🪙 <code>/coin</code> — 𝙃𝙚𝙖𝙙𝙨 𝙤𝙧 𝙩𝙖𝙞𝙡𝙨
-💭 <code>/truth</code> — 𝙏𝙧𝙪𝙩𝙝 𝙦𝙪𝙚𝙨𝙩𝙞𝙤𝙣
-🔥 <code>/dare</code> — 𝘿𝙖𝙧𝙚 𝙘𝙝𝙖𝙡𝙡𝙚𝙣𝙜𝙚
-💘 <code>/ship</code> — 𝙎𝙝𝙞𝙥 𝙩𝙬𝙤 𝙪𝙨𝙚𝙧𝙨
+🪙 <code>/coin</code> — 𝙃𝙚𝙖𝙙𝙨 / 𝙏𝙖𝙞𝙡𝙨
+💭 <code>/truth</code> — 𝙏𝙧𝙪𝙩𝙝
+🔥 <code>/dare</code> — 𝘿𝙖𝙧𝙚
+💘 <code>/ship</code> — 𝙎𝙝𝙞𝙥 𝙪𝙨𝙚𝙧𝙨
 🎱 <code>/8ball</code> — 𝙈𝙖𝙜𝙞𝙘 𝟴-𝙗𝙖𝙡𝙡""",
 
     "tools": """<b>◈ 𝙐𝙎𝙀𝙍 𝙏𝙊𝙊𝙇𝙎</b>
 
-👤 <code>/id</code> — 𝙐𝙨𝙚𝙧 / 𝙘𝙝𝙖𝙩 𝙄𝘿
-🌸 <code>/info</code> — 𝙐𝙨𝙚𝙧 𝙞𝙣𝙛𝙤𝙧𝙢𝙖𝙩𝙞𝙤𝙣
+👤 <code>/id</code> — 𝙐𝙨𝙚𝙧 / 𝘾𝙝𝙖𝙩 𝙄𝘿
+🌸 <code>/info</code> — 𝙐𝙨𝙚𝙧 𝙄𝙣𝙛𝙤
 ⚡ <code>/ping</code> — 𝘽𝙤𝙩 𝙨𝙩𝙖𝙩𝙪𝙨
 🏠 <code>/start</code> — 𝙈𝙖𝙞𝙣 𝙢𝙚𝙣𝙪
 ✈ <code>/help</code> — 𝙃𝙚𝙡𝙥 𝙘𝙚𝙣𝙩𝙚𝙧""",
@@ -363,13 +367,13 @@ PAGES = {
     "welcome": """<b>● 𝙒𝙀𝙇𝘾𝙊𝙈𝙀 𝙎𝙔𝙎𝙏𝙀𝙈</b>
 
 • <code>/setwelcome TEXT</code>
-  └─ 𝙎𝙚𝙩 𝙜𝙧𝙤𝙪𝙥 𝙬𝙚𝙡𝙘𝙤𝙢𝙚
+  └─ 𝙎𝙚𝙩 𝙬𝙚𝙡𝙘𝙤𝙢𝙚
 
 • <code>/delwelcome</code>
-  └─ 𝙍𝙚𝙢𝙤𝙫𝙚 𝙘𝙪𝙨𝙩𝙤𝙢 𝙬𝙚𝙡𝙘𝙤𝙢𝙚
+  └─ 𝙍𝙚𝙢𝙤𝙫𝙚 𝙬𝙚𝙡𝙘𝙤𝙢𝙚
 
 • <code>/welcome</code>
-  └─ 𝙎𝙝𝙤𝙬 𝙘𝙪𝙧𝙧𝙚𝙣𝙩 𝙬𝙚𝙡𝙘𝙤𝙢𝙚
+  └─ 𝙎𝙝𝙤𝙬 𝙬𝙚𝙡𝙘𝙤𝙢𝙚
 
 <b>𝙑𝘼𝙍𝙄𝘼𝘽𝙇𝙀𝙎</b>
 
@@ -380,13 +384,13 @@ PAGES = {
     "security": """<b>⚠ 𝙎𝙀𝘾𝙐𝙍𝙄𝙏𝙔 𝙂𝙐𝘼𝙍𝘿</b>
 
 🛡️ <code>/antispam on</code>
-   └─ 𝙀𝙣𝙖𝙗𝙡𝙚 𝙗𝙖𝙨𝙞𝙘 𝙖𝙣𝙩𝙞-𝙨𝙥𝙖𝙢
+   └─ 𝙀𝙣𝙖𝙗𝙡𝙚
 
 🛡️ <code>/antispam off</code>
-   └─ 𝘿𝙞𝙨𝙖𝙗𝙡𝙚 𝙖𝙣𝙩𝙞-𝙨𝙥𝙖𝙢
+   └─ 𝘿𝙞𝙨𝙖𝙗𝙡𝙚
 
 🧹 <code>/clean</code>
-   └─ 𝘽𝙤𝙩 𝙘𝙤𝙢𝙢𝙖𝙣𝙙 𝙘𝙡𝙚𝙖𝙣𝙪𝙥
+   └─ 𝘾𝙡𝙚𝙖𝙣 𝙘𝙤𝙢𝙢𝙖𝙣𝙙𝙨
 
 🔒 <code>/lock links</code>
    └─ 𝙇𝙤𝙘𝙠 𝙡𝙞𝙣𝙠𝙨
@@ -394,7 +398,7 @@ PAGES = {
 🔓 <code>/unlock links</code>
    └─ 𝙐𝙣𝙡𝙤𝙘𝙠 𝙡𝙞𝙣𝙠𝙨
 
-<i>Security commands require group-admin rights.</i>"""
+<i>Security commands require admin rights.</i>"""
 }
 
 
@@ -403,6 +407,9 @@ PAGES = {
 # =========================================================
 
 async def start(update, context):
+
+    if not update.message:
+        return
 
     if START_IMAGE:
 
@@ -420,7 +427,7 @@ async def start(update, context):
         except Exception as e:
 
             log.warning(
-                "Start image failed: %s",
+                "START_IMAGE failed: %s",
                 e
             )
 
@@ -433,7 +440,7 @@ async def start(update, context):
 
 
 # =========================================================
-# HELP COMMAND
+# HELP
 # =========================================================
 
 async def help_cmd(update, context):
@@ -446,37 +453,86 @@ async def help_cmd(update, context):
 
 
 # =========================================================
-# BUTTON HANDLER
+# UNIVERSAL BUTTON HANDLER
 # =========================================================
 
 async def buttons(update, context):
 
-    q = update.callback_query
+    query = update.callback_query
 
-    await q.answer()
+    if not query:
+        return
 
-    if q.data == "home":
+    try:
+        await query.answer()
+    except Exception:
+        pass
 
-        await q.edit_message_text(
-            START,
-            parse_mode=ParseMode.HTML,
-            reply_markup=main_kb(),
+    data = query.data
+
+    # -----------------------------------------
+    # SELECT PAGE
+    # -----------------------------------------
+
+    if data == "home":
+
+        text = START
+        keyboard = main_kb()
+
+    elif data == "help":
+
+        text = HELP
+        keyboard = help_kb()
+
+    elif data in PAGES:
+
+        text = PAGES[data]
+        keyboard = help_kb()
+
+    else:
+        return
+
+    # -----------------------------------------
+    # PHOTO MESSAGE
+    # -----------------------------------------
+
+    try:
+
+        if query.message and query.message.photo:
+
+            await query.edit_message_caption(
+                caption=text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=keyboard,
+            )
+
+            return
+
+    except Exception as e:
+
+        log.warning(
+            "Photo caption edit failed: %s",
+            e
         )
 
-    elif q.data == "help":
+    # -----------------------------------------
+    # NORMAL TEXT MESSAGE
+    # -----------------------------------------
 
-        await q.edit_message_text(
-            HELP,
+    try:
+
+        await query.edit_message_text(
+            text=text,
             parse_mode=ParseMode.HTML,
-            reply_markup=help_kb(),
+            reply_markup=keyboard,
+            disable_web_page_preview=True,
         )
 
-    elif q.data in PAGES:
+    except Exception as e:
 
-        await q.edit_message_text(
-            PAGES[q.data],
-            parse_mode=ParseMode.HTML,
-            reply_markup=help_kb(),
+        log.warning(
+            "Text message edit failed: %s",
+            e
         )
 
 
@@ -486,10 +542,10 @@ async def buttons(update, context):
 
 async def remember(update, context):
 
-    u = update.effective_user
-    ch = update.effective_chat
+    user = update.effective_user
+    chat = update.effective_chat
 
-    if not u or not ch:
+    if not user or not chat:
         return
 
     db(
@@ -505,10 +561,10 @@ async def remember(update, context):
         last_seen=excluded.last_seen
         """,
         (
-            ch.id,
-            u.id,
-            u.full_name,
-            u.username,
+            chat.id,
+            user.id,
+            user.full_name,
+            user.username,
             int(time.time()),
         ),
     )
@@ -525,14 +581,18 @@ async def track_message(update, context):
 
 async def id_cmd(update, context):
 
-    u = update.effective_user
-    ch = update.effective_chat
+    user = update.effective_user
+    chat = update.effective_chat
 
-    target = u
+    target = user
 
     if update.message.reply_to_message:
 
-        target = update.message.reply_to_message.from_user
+        target = (
+            update.message
+            .reply_to_message
+            .from_user
+        )
 
     await update.message.reply_text(
         f"""<b>👤 𝙐𝙎𝙀𝙍 𝙄𝙉𝙁𝙊</b>
@@ -544,7 +604,7 @@ async def id_cmd(update, context):
 <code>{target.id}</code>
 
 💬 <b>𝘾𝙝𝙖𝙩 𝙄𝘿:</b>
-<code>{ch.id}</code>""",
+<code>{chat.id}</code>""",
         parse_mode=ParseMode.HTML,
     )
 
@@ -555,24 +615,24 @@ async def id_cmd(update, context):
 
 async def info_cmd(update, context):
 
-    u = (
+    user = (
         update.message.reply_to_message.from_user
         if update.message.reply_to_message
         else update.effective_user
     )
 
     username = (
-        f"@{escape(u.username)}"
-        if u.username
+        f"@{escape(user.username)}"
+        if user.username
         else "𝙉𝙤 𝙪𝙨𝙚𝙧𝙣𝙖𝙢𝙚"
     )
 
     await update.message.reply_text(
         f"""<b>🌸 𝙐𝙎𝙀𝙍 𝙄𝙉𝙁𝙊</b>
 
-👤 {mention(u.id,u.full_name)}
+👤 {mention(user.id,user.full_name)}
 
-🆔 <code>{u.id}</code>
+🆔 <code>{user.id}</code>
 
 🔗 {username}""",
         parse_mode=ParseMode.HTML,
@@ -585,14 +645,15 @@ async def info_cmd(update, context):
 
 async def ping(update, context):
 
-    t = time.monotonic()
+    start_time = time.monotonic()
 
     msg = await update.message.reply_text(
         "✦ 𝘾𝙝𝙚𝙘𝙠𝙞𝙣𝙜..."
     )
 
     ms = int(
-        (time.monotonic() - t) * 1000
+        (time.monotonic() - start_time)
+        * 1000
     )
 
     await msg.edit_text(
@@ -614,7 +675,7 @@ async def admins(update, context):
             "⚠️ 𝙏𝙝𝙞𝙨 𝙘𝙤𝙢𝙢𝙖𝙣𝙙 𝙬𝙤𝙧𝙠𝙨 𝙞𝙣 𝙜𝙧𝙤𝙪𝙥𝙨."
         )
 
-    admins_list = (
+    admin_list = (
         await update.effective_chat
         .get_administrators()
     )
@@ -623,11 +684,70 @@ async def admins(update, context):
 
     text += "\n".join(
         f"• {mention(a.user.id,a.user.full_name)}"
-        for a in admins_list
+        for a in admin_list
     )
 
     await update.message.reply_text(
         text,
+        parse_mode=ParseMode.HTML,
+    )
+
+
+# =========================================================
+# TAG DELAY
+# =========================================================
+
+async def tagdelay(update, context):
+
+    if not is_group(update):
+        return
+
+    if not await is_admin(update):
+
+        return await update.message.reply_text(
+            "⚠️ 𝘼𝙙𝙢𝙞𝙣𝙨 𝙤𝙣𝙡𝙮."
+        )
+
+    if not context.args:
+
+        return await update.message.reply_text(
+            "✈ <b>𝙐𝙨𝙖𝙜𝙚:</b>\n\n"
+            "<code>/tagdelay 2</code>",
+            parse_mode=ParseMode.HTML,
+        )
+
+    try:
+
+        delay = float(context.args[0])
+
+        if delay < 0.5 or delay > 30:
+            raise ValueError
+
+    except ValueError:
+
+        return await update.message.reply_text(
+            "⚠️ 𝙑𝙖𝙡𝙞𝙙 𝙙𝙚𝙡𝙖𝙮: "
+            "<code>0.5 - 30</code> 𝙨𝙚𝙘𝙤𝙣𝙙𝙨.",
+            parse_mode=ParseMode.HTML,
+        )
+
+    db(
+        """
+        INSERT INTO settings(chat_id,tag_delay)
+        VALUES(?,?)
+
+        ON CONFLICT(chat_id)
+        DO UPDATE SET tag_delay=excluded.tag_delay
+        """,
+        (
+            update.effective_chat.id,
+            delay,
+        ),
+    )
+
+    await update.message.reply_text(
+        f"✅ <b>𝙏𝙖𝙜 𝙙𝙚𝙡𝙖𝙮 𝙨𝙚𝙩:</b> "
+        f"<code>{delay:g}s</code>",
         parse_mode=ParseMode.HTML,
     )
 
@@ -655,21 +775,42 @@ async def tagall(update, context):
         ORDER BY last_seen DESC
         LIMIT 80
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
         True,
     )
 
     rows = [
-        (i, n)
-        for i, n in rows
-        if i != update.effective_user.id
+        (user_id, name)
+        for user_id, name in rows
+        if user_id != update.effective_user.id
     ]
 
     if not rows:
 
         return await update.message.reply_text(
-            "🌈 𝙄 𝙝𝙖𝙫𝙚𝙣'𝙩 𝙨𝙚𝙚𝙣 𝙚𝙣𝙤𝙪𝙜𝙝 𝙢𝙚𝙢𝙗𝙚𝙧𝙨 𝙮𝙚𝙩."
+            "🌈 𝙄 𝙝𝙖𝙫𝙚𝙣'𝙩 𝙨𝙚𝙚𝙣 "
+            "𝙚𝙣𝙤𝙪𝙜𝙝 𝙢𝙚𝙢𝙗𝙚𝙧𝙨 𝙮𝙚𝙩."
         )
+
+    setting = db(
+        """
+        SELECT tag_delay
+        FROM settings
+        WHERE chat_id=?
+        """,
+        (
+            update.effective_chat.id,
+        ),
+        True,
+    )
+
+    delay = (
+        float(setting[0][0])
+        if setting and setting[0][0] is not None
+        else DEFAULT_TAG_DELAY
+    )
 
     db(
         """
@@ -679,7 +820,9 @@ async def tagall(update, context):
         ON CONFLICT(chat_id)
         DO UPDATE SET active=1
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
     )
 
     for start_index in range(
@@ -694,7 +837,9 @@ async def tagall(update, context):
             FROM tags
             WHERE chat_id=?
             """,
-            (update.effective_chat.id,),
+            (
+                update.effective_chat.id,
+            ),
             True,
         )
 
@@ -707,13 +852,13 @@ async def tagall(update, context):
 
         await update.message.reply_text(
             "✈️ " + " ".join(
-                mention(i, n)
-                for i, n in chunk
+                mention(user_id, name)
+                for user_id, name in chunk
             ),
             parse_mode=ParseMode.HTML,
         )
 
-        await asyncio.sleep(2)
+        await asyncio.sleep(delay)
 
     db(
         """
@@ -721,7 +866,9 @@ async def tagall(update, context):
         SET active=0
         WHERE chat_id=?
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
     )
 
 
@@ -731,13 +878,18 @@ async def tagall(update, context):
 
 async def cancel(update, context):
 
+    if not is_group(update):
+        return
+
     db(
         """
         UPDATE tags
         SET active=0
         WHERE chat_id=?
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
     )
 
     await update.message.reply_text(
@@ -762,14 +914,17 @@ async def couple(update, context):
         ORDER BY RANDOM()
         LIMIT 2
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
         True,
     )
 
     if len(rows) < 2:
 
         return await update.message.reply_text(
-            "💞 𝙉𝙚𝙚𝙙 𝙖𝙩 𝙡𝙚𝙖𝙨𝙩 𝟮 𝙖𝙘𝙩𝙞𝙫𝙚 𝙢𝙚𝙢𝙗𝙚𝙧𝙨."
+            "💞 𝙉𝙚𝙚𝙙 𝙖𝙩 𝙡𝙚𝙖𝙨𝙩 "
+            "𝟮 𝙖𝙘𝙩𝙞𝙫𝙚 𝙢𝙚𝙢𝙗𝙚𝙧𝙨."
         )
 
     a, b = rows
@@ -798,7 +953,8 @@ async def setcouple(update, context):
     ):
 
         return await update.message.reply_text(
-            "💗 𝙍𝙚𝙥𝙡𝙮 𝙩𝙤 𝙖 𝙪𝙨𝙚𝙧 𝙬𝙞𝙩𝙝 /setcouple"
+            "💗 𝙍𝙚𝙥𝙡𝙮 𝙩𝙤 𝙖 𝙪𝙨𝙚𝙧 "
+            "𝙬𝙞𝙩𝙝 /setcouple"
         )
 
     a = update.effective_user
@@ -867,7 +1023,8 @@ async def mycouple(update, context):
     if not r:
 
         return await update.message.reply_text(
-            "💔 𝙔𝙤𝙪 𝙙𝙤𝙣'𝙩 𝙝𝙖𝙫𝙚 𝙖 𝙘𝙤𝙪𝙥𝙡𝙚 𝙮𝙚𝙩."
+            "💔 𝙔𝙤𝙪 𝙙𝙤𝙣'𝙩 𝙝𝙖𝙫𝙚 "
+            "𝙖 𝙘𝙤𝙪𝙥𝙡𝙚 𝙮𝙚𝙩."
         )
 
     p = db(
@@ -938,14 +1095,17 @@ async def ship(update, context):
         ORDER BY RANDOM()
         LIMIT 2
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
         True,
     )
 
     if len(rows) < 2:
 
         return await update.message.reply_text(
-            "💗 𝙉𝙤𝙩 𝙚𝙣𝙤𝙪𝙜𝙝 𝙖𝙘𝙩𝙞𝙫𝙚 𝙪𝙨𝙚𝙧𝙨."
+            "💗 𝙉𝙤𝙩 𝙚𝙣𝙤𝙪𝙜𝙝 "
+            "𝙖𝙘𝙩𝙞𝙫𝙚 𝙪𝙨𝙚𝙧𝙨."
         )
 
     score = random.randint(
@@ -973,7 +1133,7 @@ async def ship(update, context):
 
 
 # =========================================================
-# DICE
+# GAMES
 # =========================================================
 
 async def dice(update, context):
@@ -990,10 +1150,6 @@ async def dice(update, context):
     )
 
 
-# =========================================================
-# COIN
-# =========================================================
-
 async def coin(update, context):
 
     result = random.choice([
@@ -1006,10 +1162,6 @@ async def coin(update, context):
         parse_mode=ParseMode.HTML,
     )
 
-
-# =========================================================
-# TRUTH / DARE / 8 BALL
-# =========================================================
 
 TRUTHS = [
     "𝙒𝙝𝙤 𝙬𝙖𝙨 𝙮𝙤𝙪𝙧 𝙡𝙖𝙨𝙩 𝙘𝙧𝙪𝙨𝙝?",
@@ -1054,8 +1206,7 @@ async def dare(update, context):
 async def ball(update, context):
 
     await update.message.reply_text(
-        "🎱 "
-        + random.choice(ANS)
+        "🎱 " + random.choice(ANS)
     )
 
 
@@ -1071,7 +1222,9 @@ async def welcome_cmd(update, context):
         FROM settings
         WHERE chat_id=?
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
         True,
     )
 
@@ -1158,7 +1311,9 @@ async def delwelcome(update, context):
             welcome_enabled=1
         WHERE chat_id=?
         """,
-        (update.effective_chat.id,),
+        (
+            update.effective_chat.id,
+        ),
     )
 
     await update.message.reply_text(
@@ -1175,16 +1330,16 @@ async def new_member(update, context):
     if not update.chat_member:
         return
 
-    cm = update.chat_member
+    member_update = update.chat_member
 
-    if cm.new_chat_member.status not in (
+    if member_update.new_chat_member.status not in (
         ChatMemberStatus.MEMBER,
         ChatMemberStatus.RESTRICTED,
     ):
         return
 
-    u = cm.new_chat_member.user
-    ch = cm.chat
+    user = member_update.new_chat_member.user
+    chat = member_update.chat
 
     r = db(
         """
@@ -1192,7 +1347,9 @@ async def new_member(update, context):
         FROM settings
         WHERE chat_id=?
         """,
-        (ch.id,),
+        (
+            chat.id,
+        ),
         True,
     )
 
@@ -1200,7 +1357,8 @@ async def new_member(update, context):
 
         text = (
             r[0][0]
-            or "🌸 Welcome {mention} to <b>{title}</b>!"
+            or "🌸 Welcome {mention} "
+               "to <b>{title}</b>!"
         )
 
     else:
@@ -1212,26 +1370,27 @@ async def new_member(update, context):
 
     text = text.replace(
         "{name}",
-        escape(u.full_name),
+        escape(user.full_name)
     )
 
     text = text.replace(
         "{mention}",
         mention(
-            u.id,
-            u.full_name
-        ),
+            user.id,
+            user.full_name
+        )
     )
 
     text = text.replace(
         "{title}",
         escape(
-            ch.title or "our group"
-        ),
+            chat.title
+            or "our group"
+        )
     )
 
     await context.bot.send_message(
-        ch.id,
+        chat.id,
         text,
         parse_mode=ParseMode.HTML,
     )
@@ -1255,7 +1414,10 @@ async def antispam(update, context):
         else ""
     )
 
-    if arg not in ("on", "off"):
+    if arg not in (
+        "on",
+        "off"
+    ):
 
         return await update.message.reply_text(
             "𝙐𝙨𝙚:\n"
@@ -1370,9 +1532,12 @@ async def security_filter(update, context):
     ):
         return
 
-    u = update.effective_user
+    user = update.effective_user
 
-    if await is_admin(update, u.id):
+    if await is_admin(
+        update,
+        user.id
+    ):
         return
 
     text = (
@@ -1387,18 +1552,20 @@ async def security_filter(update, context):
         or "t.me/" in text
     ):
 
-        r = db(
+        result = db(
             """
             SELECT 1
             FROM locks
             WHERE chat_id=?
             AND feature='links'
             """,
-            (update.effective_chat.id,),
+            (
+                update.effective_chat.id,
+            ),
             True,
         )
 
-        if r:
+        if result:
 
             try:
 
@@ -1410,7 +1577,7 @@ async def security_filter(update, context):
 
 
 # =========================================================
-# BUILD APPLICATION
+# BUILD
 # =========================================================
 
 def build():
@@ -1422,7 +1589,7 @@ def build():
         .build()
     )
 
-    # ---------------- BASIC ----------------
+    # BASIC
 
     app.add_handler(
         CommandHandler(
@@ -1459,7 +1626,7 @@ def build():
         )
     )
 
-    # ---------------- TAG ----------------
+    # TAG
 
     app.add_handler(
         CommandHandler(
@@ -1477,12 +1644,19 @@ def build():
 
     app.add_handler(
         CommandHandler(
+            "tagdelay",
+            tagdelay
+        )
+    )
+
+    app.add_handler(
+        CommandHandler(
             "cancel",
             cancel
         )
     )
 
-    # ---------------- COUPLES ----------------
+    # COUPLES
 
     app.add_handler(
         CommandHandler(
@@ -1519,7 +1693,7 @@ def build():
         )
     )
 
-    # ---------------- GAMES ----------------
+    # GAMES
 
     app.add_handler(
         CommandHandler(
@@ -1556,7 +1730,7 @@ def build():
         )
     )
 
-    # ---------------- WELCOME ----------------
+    # WELCOME
 
     app.add_handler(
         CommandHandler(
@@ -1579,7 +1753,7 @@ def build():
         )
     )
 
-    # ---------------- SECURITY ----------------
+    # SECURITY
 
     app.add_handler(
         CommandHandler(
@@ -1602,7 +1776,7 @@ def build():
         )
     )
 
-    # ---------------- BUTTONS ----------------
+    # CALLBACK BUTTONS
 
     app.add_handler(
         CallbackQueryHandler(
@@ -1610,7 +1784,7 @@ def build():
         )
     )
 
-    # ---------------- NEW MEMBERS ----------------
+    # NEW MEMBERS
 
     app.add_handler(
         ChatMemberHandler(
@@ -1619,7 +1793,7 @@ def build():
         )
     )
 
-    # ---------------- USER TRACKING ----------------
+    # TRACK USERS
 
     app.add_handler(
         MessageHandler(
@@ -1628,7 +1802,7 @@ def build():
         )
     )
 
-    # ---------------- SECURITY ----------------
+    # SECURITY FILTER
 
     app.add_handler(
         MessageHandler(
