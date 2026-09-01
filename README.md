@@ -1,39 +1,63 @@
-# ALLTEGBOT
+<p align="center">
+<b>𝗗𝗘𝗣𝗟𝗢𝗬𝗠𝗘𝗡𝗧 𝗠𝗘𝗧𝗛𝗢𝗗𝗦</b>
+</p>
 
-A Python Telegram group bot with tagging, couples, games, welcome messages and moderation.
+<h3 align="center">
+    ─「 ᴅᴇᴩʟᴏʏ ᴏɴ ʜᴇʀᴏᴋᴜ 」─
+</h3>
 
-## Features
+<p align="center"><a href="https://dashboard.heroku.com/new?template=https://github.com/Yewsdhi/ALLTEGBOT"> <img src="https://www.herokucdn.com/deploy/button.svg"></a></p>
 
-- `/tagall` and `/tagadmins`
-- `/cancel` and `/tagdelay`
-- Couple / ship commands
-- Dice, coin, truth, dare and 8-ball
-- Custom welcome messages
-- Link lock
-- Anti-spam message deletion
-- SQLite persistence
-- Inline help menu
-- Heroku worker configuration
+<br />
 
-## Heroku
+---
 
-Set at least:
+### 🔧 Quick Setup
 
-- `BOT_TOKEN` — required
-- `BOT_USERNAME` — bot username without `@`
-- `OWNER_CHAT_ID` — optional numeric owner ID
-- `OWNER_URL`, `SUPPORT_URL`, `UPDATE_URL` — optional Telegram links
+1. **Upgrade & Update:**
+   ```bash
+   sudo apt-get update && sudo apt-get upgrade -y
+   ```
 
-The bot must be an administrator in a group for commands that need admin privileges, and it needs **Delete Messages** permission for `/lock links` and `/antispam`.
+2. **Install Required Packages:**
+   ```bash
+   sudo apt-get install python3-pip ffmpeg -y
+   ```
+3. **Setting up PIP**
+   ```bash
+   sudo pip3 install -U pip
+   ```
+4. **Installing Node**
+   ```bash
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash && source ~/.bashrc && nvm install v18
+   ```
+5. **Clone the Repository**
+   ```bash
+   git clone https://github.com/Badnam019/KRITIMUSIC && cd KRITIMUSIC
+   ```
+6. **Install Requirements**
+   ```bash
+   pip3 install -U -r requirements.txt
+   ```
+7. **Create .env  with sample.env**
+   ```bash
+   cp sample.env .env
+   ```
+   - Edit .env with your vars
+8. **Editing Vars:**
+   ```bash
+   vi .env
+   ```
+   - Edit .env with your values.
+   - Press `I` button on keyboard to start editing.
+   - Press `Ctrl + C`  once you are done with editing vars and type `:wq` to save .env or `:qa` to exit editing.
+9. **Installing tmux**
+    ```bash
+    sudo apt install tmux -y && tmux
+    ```
+10. **Run the Bot**
+    ```bash
+    bash start
+    ```
 
-### Local
-
-```bash
-python -m pip install -r requirements.txt
-export BOT_TOKEN="YOUR_TOKEN"
-python bot.py
-```
-
-## Important Telegram limitation
-
-A normal Telegram bot cannot request the complete member list of a group. `/tagall` therefore tags members the bot has seen/remembered. `/tagadmins` uses Telegram's current administrator list.
+---

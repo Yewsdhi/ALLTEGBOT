@@ -1,12 +1,12 @@
 {
-  "name": "ALLTEGBOT",
-  "description": "Telegram group tag, welcome, fun and security bot.",
+  "name": "Maya Mention Full Bot",
+  "description": "Maya Mention style Telegram group bot",
   "keywords": [
     "telegram",
     "bot",
-    "group",
-    "tagall",
-    "moderation"
+    "mention",
+    "groups",
+    "games"
   ],
   "env": {
     "BOT_TOKEN": {
@@ -15,52 +15,15 @@
     },
     "BOT_USERNAME": {
       "description": "Bot username without @",
-      "value": ""
-    },
-    "OWNER_CHAT_ID": {
-      "description": "Optional owner Telegram numeric chat/user ID for /start notifications",
-      "required": false
-    },
-    "OWNER_URL": {
-      "description": "Owner Telegram URL",
-      "value": "https://t.me/"
+      "value": "mentionmayabot"
     },
     "SUPPORT_URL": {
       "description": "Support Telegram URL",
-      "value": "https://t.me/"
+      "value": "https://t.me/wafa_se_mohabbat_tak"
     },
     "UPDATE_URL": {
       "description": "Updates Telegram URL",
-      "value": "https://t.me/"
-    },
-    "START_IMAGE": {
-      "description": "Optional direct image URL or Telegram file_id for /start",
-      "value": ""
-    },
-    "DB_PATH": {
-      "description": "SQLite database path",
-      "value": "alltegbot.db"
-    },
-    "MAX_TAG_USERS": {
-      "description": "Maximum remembered users per /tagall (1-200)",
-      "value": "80"
-    },
-    "TAG_CHUNK_SIZE": {
-      "description": "Users per tag message (1-10)",
-      "value": "8"
-    },
-    "SPAM_WINDOW": {
-      "description": "Anti-spam time window in seconds",
-      "value": "8"
-    },
-    "SPAM_MAX_MESSAGES": {
-      "description": "Messages allowed in the anti-spam window",
-      "value": "6"
-    }
-  },
-  "formation": {
-    "worker": {
-      "quantity": 1
+      "value": "https://t.me/wafa_Mohabbat_ki"
     }
   }
 }
